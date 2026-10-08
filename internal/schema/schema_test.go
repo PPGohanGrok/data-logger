@@ -1,6 +1,9 @@
 package schema
 
-import "testing"
+import (
+	"fmt"
+	"testing"
+)
 
 func TestHashStable(t *testing.T) {
 	a := Hash([]string{"temp", "flow"})
@@ -25,16 +28,23 @@ func TestValidate(t *testing.T) {
 	}
 	many := make([]string, MaxFields+1)
 	for i := range many {
-		many[i] = "f"
-	}
-	// 重复名会先失败；换成唯一名字再测上限。
-	for i := range many {
-		many[i] = string(rune('a'+i%26)) + string(rune('0'+i/26))
+		many[i] = fmt.Sprintf("f%d", i)
 	}
 	if err := Validate(many); err == nil {
-		t.Fatal("超过 120 个字段应该被拒绝")
+		t.Fatal("超过字段上限应该被拒绝")
+	}
+	if err := Validate(makeNames(MaxFields)); err != nil {
+		t.Fatal(err)
 	}
 	if err := Validate([]string{"反应器温度"}); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func makeNames(n int) []string {
+	names := make([]string, n)
+	for i := range names {
+		names[i] = fmt.Sprintf("f%d", i)
+	}
+	return names
 }

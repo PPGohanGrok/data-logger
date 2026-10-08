@@ -10,11 +10,15 @@ import (
 	"unicode/utf8"
 )
 
-const MaxFields = 120
+// MaxFields 是一条样本里的浮点个数上限。
+// 早期为了把单条记录压在 1024 字节内，上限是 120。
+// 传感器一秒的文本可以超过 1024 字节（一般不超过 40960 位，即 5120 字节），
+// 所以这里不再按 1024 字节倒推字段数。
+const MaxFields = 1024
 
 var (
 	ErrNoFields  = errors.New("至少要有一个字段")
-	ErrTooMany   = errors.New("字段不能超过 120 个")
+	ErrTooMany   = errors.New("字段太多")
 	ErrBadName   = errors.New("字段名无效")
 	ErrDuplicate = errors.New("字段名重复")
 )
@@ -25,7 +29,7 @@ func Validate(fields []string) error {
 		return ErrNoFields
 	}
 	if len(fields) > MaxFields {
-		return fmt.Errorf("%w：当前 %d 个", ErrTooMany, len(fields))
+		return fmt.Errorf("%w：当前 %d 个，上限 %d", ErrTooMany, len(fields), MaxFields)
 	}
 	seen := make(map[string]struct{}, len(fields))
 	for _, name := range fields {

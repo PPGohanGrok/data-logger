@@ -17,6 +17,7 @@ import (
 	"tsdb/internal/httpapi"
 	"tsdb/internal/live"
 	"tsdb/internal/store"
+	"tsdb/internal/tcpin"
 )
 
 func main() {
@@ -68,7 +69,8 @@ func usage() {
   tsdb service start
   tsdb service stop
 
-默认监听 127.0.0.1:8741。当前值页面是 http://127.0.0.1:8741/
+画面默认在 http://127.0.0.1:8741/ 。
+传感器中枢用 TCP 连接局域网端口，默认 0.0.0.0:8742。
 `)
 }
 
@@ -103,9 +105,10 @@ func runServe(args []string, ctx context.Context) error {
 	}
 
 	hub := live.New()
+	names := cfg.Names()
 	st, err := store.Open(store.Options{
 		DataDir:    cfg.DataDir,
-		Fields:     cfg.Fields,
+		Fields:     names,
 		Retention:  cfg.Retention(),
 		CacheHours: cfg.CacheHours,
 		OnSample: func(rec store.Record) {
@@ -125,7 +128,8 @@ func runServe(args []string, ctx context.Context) error {
 	api := &httpapi.Server{
 		Store:         st,
 		Hub:           hub,
-		Fields:        cfg.Fields,
+		Fields:        names,
+		Codes:         cfg.Codes(),
 		RetentionDays: cfg.RetentionDays,
 		CacheHours:    cfg.CacheHours,
 	}
@@ -134,18 +138,33 @@ func runServe(args []string, ctx context.Context) error {
 		Handler:           api.Handler(),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
-	errc := make(chan error, 1)
+	errc := make(chan error, 2)
 	go func() {
-		log.Printf("监听 http://%s ，数据目录 %s ，%d 个字段，保留 %d 天", cfg.Listen, cfg.DataDir, len(cfg.Fields), cfg.RetentionDays)
+		log.Printf("画面 http://%s ，传感器 TCP %s ，数据目录 %s ，%d 个字段，保留 %d 天", cfg.Listen, cfg.TCPListen, cfg.DataDir, len(names), cfg.RetentionDays)
 		errc <- srv.ListenAndServe()
 	}()
-	select {
-	case <-ctx.Done():
+	go func() {
+		tcpSrv := &tcpin.Server{
+			Addr:  cfg.TCPListen,
+			Store: st,
+			Codes: cfg.Codes(),
+			Idle:  cfg.FrameIdle(),
+		}
+		if err := tcpSrv.Serve(ctx); err != nil {
+			errc <- err
+		}
+	}()
+	shutdown := func() {
 		shut, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		_ = srv.Shutdown(shut)
+	}
+	select {
+	case <-ctx.Done():
+		shutdown()
 		return nil
 	case err := <-errc:
+		shutdown()
 		if errors.Is(err, http.ErrServerClosed) {
 			return nil
 		}

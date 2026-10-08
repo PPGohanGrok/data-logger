@@ -27,6 +27,7 @@ type Server struct {
 	Store         *store.Store
 	Hub           *live.Hub
 	Fields        []string
+	Codes         []string
 	RetentionDays int
 	CacheHours    int
 }
@@ -217,14 +218,18 @@ func (s *Server) handleLive(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleSchema(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{
+	body := map[string]any{
 		"fields":         s.Fields,
 		"field_count":    len(s.Fields),
 		"record_size":    schema.RecordSize(len(s.Fields)),
 		"schema_hash":    fmt.Sprintf("%016x", schema.Hash(s.Fields)),
 		"retention_days": s.RetentionDays,
 		"cache_hours":    s.CacheHours,
-	})
+	}
+	if len(s.Codes) == len(s.Fields) {
+		body["codes"] = s.Codes
+	}
+	writeJSON(w, http.StatusOK, body)
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
