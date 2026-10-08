@@ -36,7 +36,7 @@ CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o tsdb.exe ./cmd/tsdb
 
 ## 传感器 TCP
 
-中枢作为 TCP 客户端连接 `tcp_listen`（默认 `0.0.0.0:8742`）。报文是 UTF-8 文本，程序不主动向外建立连接。
+本程序是 TCP 服务端，在 `tcp_listen`（默认 `0.0.0.0:8742`）上等待连接。传感器中枢作为客户端连进来。程序不会主动去连中枢，也不从公网取数。报文是 UTF-8 文本。
 
 支持两种行格式：
 

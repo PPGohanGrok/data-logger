@@ -63,6 +63,8 @@ func (s *Server) ServeListener(ctx context.Context, ln net.Listener) error {
 
 func (s *Server) handle(ctx context.Context, conn net.Conn) {
 	defer conn.Close()
+	log.Printf("传感器已连入 %s", conn.RemoteAddr())
+	defer log.Printf("传感器断开 %s", conn.RemoteAddr())
 	asm := NewAssembler(s.Codes)
 	idle := s.Idle
 	if idle <= 0 {

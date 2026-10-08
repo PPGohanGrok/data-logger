@@ -159,7 +159,7 @@ func runServe(args []string, ctx context.Context) error {
 	}
 	errc := make(chan error, 2)
 	go func() {
-		log.Printf("画面 http://%s/ ，传感器 TCP %s ，数据目录 %s ，%d 个字段，保留 %d 天", httpBound.Addr, tcpBound.Addr, cfg.DataDir, len(names), cfg.RetentionDays)
+		log.Printf("画面 http://%s/ ，TCP 服务端等待传感器连入 %s ，数据目录 %s ，%d 个字段，保留 %d 天", httpBound.Addr, tcpBound.Addr, cfg.DataDir, len(names), cfg.RetentionDays)
 		errc <- srv.Serve(httpBound.Listener)
 	}()
 	go func() {
