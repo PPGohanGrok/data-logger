@@ -15,6 +15,7 @@ import (
 
 	"tsdb/internal/config"
 	"tsdb/internal/httpapi"
+	"tsdb/internal/listen"
 	"tsdb/internal/live"
 	"tsdb/internal/store"
 	"tsdb/internal/tcpin"
@@ -133,24 +134,41 @@ func runServe(args []string, ctx context.Context) error {
 		RetentionDays: cfg.RetentionDays,
 		CacheHours:    cfg.CacheHours,
 	}
+	used := map[int]bool{}
+	httpBound, err := listen.Listen("tcp", cfg.Listen, used)
+	if err != nil {
+		return fmt.Errorf("画面端口: %w", err)
+	}
+	if httpBound.Cause != nil {
+		log.Printf("画面端口 %s 绑不上：%v", cfg.Listen, httpBound.Cause)
+		log.Printf("没有程序占用时，Windows 仍可能因系统保留端口拒绝绑定。可查看：netsh interface ipv4 show excludedportrange protocol=tcp")
+		log.Printf("画面已改用 http://%s/", httpBound.Addr)
+	}
+	tcpBound, err := listen.Listen("tcp", cfg.TCPListen, used)
+	if err != nil {
+		httpBound.Listener.Close()
+		return fmt.Errorf("传感器端口: %w", err)
+	}
+	if tcpBound.Cause != nil {
+		log.Printf("传感器端口 %s 绑不上：%v", cfg.TCPListen, tcpBound.Cause)
+		log.Printf("传感器 TCP 已改用 %s", tcpBound.Addr)
+	}
 	srv := &http.Server{
-		Addr:              cfg.Listen,
 		Handler:           api.Handler(),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	errc := make(chan error, 2)
 	go func() {
-		log.Printf("画面 http://%s ，传感器 TCP %s ，数据目录 %s ，%d 个字段，保留 %d 天", cfg.Listen, cfg.TCPListen, cfg.DataDir, len(names), cfg.RetentionDays)
-		errc <- srv.ListenAndServe()
+		log.Printf("画面 http://%s/ ，传感器 TCP %s ，数据目录 %s ，%d 个字段，保留 %d 天", httpBound.Addr, tcpBound.Addr, cfg.DataDir, len(names), cfg.RetentionDays)
+		errc <- srv.Serve(httpBound.Listener)
 	}()
 	go func() {
 		tcpSrv := &tcpin.Server{
-			Addr:  cfg.TCPListen,
 			Store: st,
 			Codes: cfg.Codes(),
 			Idle:  cfg.FrameIdle(),
 		}
-		if err := tcpSrv.Serve(ctx); err != nil {
+		if err := tcpSrv.ServeListener(ctx, tcpBound.Listener); err != nil {
 			errc <- err
 		}
 	}()

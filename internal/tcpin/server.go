@@ -30,12 +30,17 @@ type Server struct {
 	Notify chan<- string
 }
 
-// Serve 接受连接，直到 ctx 结束。
+// Serve 在 Addr 上接受连接，直到 ctx 结束。
 func (s *Server) Serve(ctx context.Context) error {
 	ln, err := net.Listen("tcp", s.Addr)
 	if err != nil {
 		return err
 	}
+	return s.ServeListener(ctx, ln)
+}
+
+// ServeListener 使用已经绑定好的监听器。
+func (s *Server) ServeListener(ctx context.Context, ln net.Listener) error {
 	defer ln.Close()
 	if s.Notify != nil {
 		s.Notify <- ln.Addr().String()
